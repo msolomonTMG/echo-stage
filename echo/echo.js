@@ -1,19 +1,27 @@
 'use strict';
 
-const github = require('../github')
-const jenkins = require('../jenkins')
+const
+  github = require('../github'),
+  jenkins = require('../jenkins'),
+  jira = require('../jira');
 
 var helpers = {
   deploy: function(deployInfo) {
     return new Promise(function(resolve, reject) {
-      github.findBranchByTicket(deployInfo.Ticket.value).then(branch => {
-        jenkins.deploy(branch, deployInfo.Server.value).then(secondsRemaining => {
-          return resolve(secondsRemaining)
+      jira.getTicketFromQuery(deployInfo.Query.value).then(ticketInfo => {
+        github.findBranchByTicket(ticketInfo.key).then(branch => {
+          jenkins.deploy(branch, deployInfo.Server.value).then(secondsRemaining => {
+            let responseData = {
+              ticket: ticketInfo,
+              secondsRemaining: secondsRemaining
+            }
+            return resolve(responseData)
+          }).catch(err => {
+            return reject(err)
+          })
         }).catch(err => {
           return reject(err)
         })
-      }).catch(err => {
-        return reject(err)
       })
     })
   },
@@ -39,9 +47,8 @@ var functions = {
     return new Promise(function(resolve, reject) {
       switch(intent.name) {
         case 'Deploy':
-          helpers.deploy(intent.slots).then(secondsRemaining => {
-            console.log(secondsRemaining)
-            helpers.formatResponse('Deploying to ' + intent.slots.Server.value + '. ETA: ' + secondsRemaining + ' seconds').then(response => {
+          helpers.deploy(intent.slots).then(jobData => {
+            helpers.formatResponse('Deploying ' + jobData.ticket.summary + ' to ' + intent.slots.Server.value + '. ETA: ' + jobData.secondsRemaining + ' seconds').then(response => {
               return resolve(response)
             })
           })
